@@ -1,0 +1,10 @@
+# ── Docs build output ────────────────────────────────────────────
+_site/
+.jekyll-cache/
+site/
+node_modules/
+
+# ── OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
