@@ -16,7 +16,7 @@ Related: [operating-modes.md](operating-modes.md), [telemetry-quality.md](teleme
  sensor board (ESP32 / STM32)   task watchdog / IWDG, reset reason, I²C bus recovery
         │ USB / UART
  edge node (Raspberry Pi 5)     systemd watchdog per service, hardware watchdog, degraded modes,
-        │                       local broker: store-and-forward, blackbox (48 h)
+        │                       local broker: store-and-forward, blackbox (9 days)
         │ MQTT over TLS
  MCC broker ─► MQTT→Kafka bridge ─► validator ─► processor ─► InfluxDB
         │                                  └────► health monitor (FDIR engine) ─► alarms, modes

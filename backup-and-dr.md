@@ -6,7 +6,8 @@
 |---|---|---|
 | Postgres (alarms and history, plans, crew, inventory, Keycloak realm data) | `postgres_data` volume | `pg_dump` every 6 h, verified (`pg_restore --list`), row counts recorded |
 | InfluxDB (all telemetry) | `influxdb_data` volume | `influx backup` every 6 h, manifest verified, point count of a closed 24 h window recorded |
-| Telemetry in transit | Kafka (7-day retention), each node's local broker queue, each node's blackbox (48 h) | nothing is committed until stored; replay tools |
+| Telemetry in transit | Kafka (10-day retention), each node's local broker queue, each node's blackbox (9 days) | nothing is committed until stored; replay tools |
+| Mission record | `MISSION_ARCHIVE_DIR`: every finished sol, per-sensor CSVs + summary + SHA-256 ([mission-operations.md](mission-operations.md)) | put it on an external drive |
 | Configuration and secrets | `imm-os-infra/.env`, `mosquitto/certs/`, the nodes' `/etc/imm-os/` | **keep an offline copy in a password manager or safe**: not in the automatic backups |
 | Code | GitHub | – |
 
