@@ -83,6 +83,12 @@ The first runs of the test on the full stack found real faults, each now fixed a
    - autoheal misread "health: starting";
    - the climate controller kept a dehumidifier running on stale humidity.
 
-## Latest result
+## Latest result (sandbox MCC stack, 2026-09-29)
 
-See `vv/reports/` on the MCC for the full report of each run.
+All 31 checks passed: 30 in a full run, and VV-INT-01 in a re-check after correcting how the test counts readings still in flight.
+- End-to-end integrity passed through every outage: 7692 values in the full run, 1410 in the re-check (Kafka and InfluxDB outages).
+- EVA LOS at 10.6 s, 30.3 s and 120.7 s.
+- A crashed worker was back in 7 s; a hung worker was restarted by autoheal in 120 s.
+- Restore drills took about 3 s each (small database).
+
+Run it on the real MCC with the real nodes before the mission; reports go to `vv/reports/`.
