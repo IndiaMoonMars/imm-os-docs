@@ -13,6 +13,7 @@ The **Mission** page (MSN-06) records a mission of N sols (default 7).
 | Backups | Postgres and InfluxDB every 6 h | `BACKUP_DIR` | see [backup-and-dr.md](backup-and-dr.md) |
 | Kafka | Every reading, replayable | 10 days (`KAFKA_LOG_RETENTION_HOURS=240`) | a processing fault |
 | Each Pi | Its own copy of every reading (blackbox) | `/var/lib/imm-os/blackbox`, 9 days (`IMM_BLACKBOX_RETENTION_H=216`, about 150 MB a day) | MCC down for days |
+| Each Pi's SD card | Every reading as **readable CSV**, filed by sol: `/var/lib/imm-os/records/<mission>-<id>/sol-NN/<sensor>_<zone>.csv` (IST and UTC times) | kept (nothing deleted unless `IMM_RECORD_KEEP_DAYS` is set; pauses below 1 GB free) | a lost MCC PC |
 
 **Sols are not stored with the readings.** They are computed from each reading's time and T0, so correcting T0 on the Mission page rewrites nothing. (The telemetry processor's own `sol` tag is the Mars Sol Date and has nothing to do with mission sols.)
 
@@ -22,6 +23,23 @@ The **Mission** page (MSN-06) records a mission of N sols (default 7).
 - which sols are archived.
 
 Alarms come from the health monitor's alarm history.
+
+### The Pi's SD-card copy (`imm-sd-recorder` service)
+
+Every node writes what it publishes to CSV on its own SD card:
+- `<mission>-<id>/sol-01/`, `sol-02/`, … during the mission;
+- `pre-mission/<IST date>/` before Sol 1;
+- `no-mission/<IST date>/` otherwise.
+
+The sol comes from the MCC's mission start. The Pi asks every 5 min and remembers the answer, so an MCC outage doesn't mix up the folders. This is about 60–100 MB a day for both sensor boards.
+
+Copy it to the MCC PC (PowerShell):
+
+```powershell
+scp -r pratham@node-rpi-01.local:/var/lib/imm-os/records C:\Users\PRATHAM\Documents\pi-records
+```
+
+With no second drive on the MCC PC, this is the mission's second copy.
 
 ## Numbers on the page
 
