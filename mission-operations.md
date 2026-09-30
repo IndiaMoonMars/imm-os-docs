@@ -85,6 +85,23 @@ Download links carry a 2-minute token, because a browser link can't send the log
 
 Edit (commander or MCC operator) can rename the mission, move T0 or change the number of sols. Every change goes into the mission log.
 
+## Mission control: restart, test runs, abort, History
+
+**Nothing here deletes readings.** A mission is a time window, and these controls only end or relabel it. Every action is written to the mission log. Only a commander or MCC operator can use them, and **Restart** and **Abort** ask you to type the mission name to confirm.
+
+| Mission control ▾ | What happens |
+|---|---|
+| **Restart mission** | Ends the current mission now and starts a new one with the same name, sols and crew. Sol 1 starts now, or at a time you pick. The old mission is kept as *restarted* (or as a *test run*, your choice), with its sols, archive, downloads and SD-card folder. |
+| **Mark as test run** | A dry run: kept, but left out of History's list and labelled TEST RUN. Undo it the same way. |
+| **End mission now** | Finishes it early. The sols so far are archived; **New mission** appears. |
+| **Abort (false start)** | Only until **1 hour into Sol 1**. The mission is labelled *aborted* and leaves the page; the previous mission (if any) is the current one again. |
+
+**History** lists every mission, newest first, with its status and archived readings. Tick *show test runs and aborted* to see those too. **Open** shows an earlier mission's page read-only (address `?mission=<id>`): its sols, statistics, timeline (marked where it ended), data health, events and all downloads.
+
+**The Pi's SD card** files by mission id. After a restart, new readings go into a new folder `<mission>-<new id>/sol-01/`, and the old folder stays. After an abort, readings go back to the previous mission's folders, or to `no-mission/`.
+
+**The archiver** also finishes a restarted mission: its cut-short last sol is archived 10 minutes after the restart.
+
 ## Calibrations (ESP32 sensor board)
 
 From the Pi, run `.venv/bin/python sensor_drivers/esp32_bridge.py --send "<command>"`:
@@ -115,6 +132,8 @@ From the Pi, run `.venv/bin/python sensor_drivers/esp32_bridge.py --send "<comma
 `/api/mission`:
 - `GET ""` (the mission and its clock);
 - `POST /start`, `PATCH ""`, `POST /end`;
+- `POST /restart` (`confirm`, `keep_as`: restarted | test, `start_ist`), `POST /abort` (`confirm`), `POST /label` (`test`), `GET /history` (`?all=1`);
+- every read and download takes `?mission=<id>` for an earlier mission;
 - `GET /overview`, `/sol/{n}`, `/timeline?measurement=`, `/overlay?measurement=`, `/health`, `/dose`;
 - `POST /events`;
 - `POST /download-token`;
