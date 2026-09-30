@@ -96,6 +96,8 @@ From the Pi, run `.venv/bin/python sensor_drivers/esp32_bridge.py --send "<comma
 | `ASC_ON` | Turns SCD40 self-calibration back on, after the mission. |
 | `CAL_MQ4` | After 24–48 h burn-in, warm, in clean air: stores the MQ-4's R0 in flash. |
 | `CAL_BNO_CLEAR` | Forgets the stored BNO055 calibration. |
+| `SCD_TEST` | SCD40 self-test (10 s). Use it when CO₂ reads 0 but temperature and humidity don't: *passed* means the 3.3 V supply sags during the sensor's lamp pulses (give it its own supply and short wires); *FAILED* means the sensor itself. |
+| `SCD_RESET` | SCD40 factory reset: forgets a forced recalibration and stored settings. Run `CAL_CO2` again afterwards. |
 
 ## Warm-up, only where physics needs it
 
