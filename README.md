@@ -9,5 +9,6 @@ All documentation, ADRs, API specs.
 - [Telemetry quality](telemetry-quality.md): quality and health flags on every reading
 - [EVA contingency](eva-contingency.md): loss of signal handling
 - [Backup and disaster recovery](backup-and-dr.md)
+- [Switching everything off and on again](power-off-on.md): shutdown order, start-up order, what's normal after power-on
 - [Pi node not on the network](pi-recovery.md): find it, bring it back, and keep it from happening again
 - [V&V plan and mission readiness test](vv-plan.md)
