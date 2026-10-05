@@ -6,20 +6,22 @@ This is for the whole IMM-OS setup: the MCC laptop, the Raspberry Pi (`node-rpi-
 
 | Device | What it keeps | At power-on |
 |---|---|---|
-| Internal board (BME280, SCD40, BNO055, O₂, MQ-4) | Firmware and Wi-Fi in its flash; BNO055 calibration | Joins the Wi-Fi and serves readings at `http://192.168.1.144/json` |
+| Internal board (BME280, SCD40, BNO055, O₂, MQ-4) | Firmware and Wi-Fi in its flash; BNO055 calibration | Joins the Wi-Fi and serves readings at `http://imm-sensors.local/json` |
 | External board (Geiger, GNSS) | Its own firmware and Wi-Fi | Serves readings at `http://192.168.1.139/data` |
 | Raspberry Pi | IMM-OS services (started at boot), board addresses in `/etc/imm-os/edge.env` | Reads both boards over Wi-Fi, finds the MCC, sends the data, records it to the SD card |
 | MCC laptop | IMM-OS containers (`restart: unless-stopped`) | The dashboard comes back once Docker Desktop is running |
 
 Flash again only when the firmware changes or a board is replaced.
 
-**This only works if the addresses never change.** In the router's DHCP reservation settings, reserve:
+**Addresses are handled so you don't chase IPs** (firmware from Oct 2026 onward):
 
-| Device | IP |
-|---|---|
-| Pi `node-rpi-01` | `192.168.1.135` |
-| Internal board `imm-sensors` (MAC `68:09:47:b4:79:b4`) | `192.168.1.144` |
-| External board | `192.168.1.139` |
+| Device | Reached by | Survives a router change? |
+|---|---|---|
+| Pi `node-rpi-01` | the name `node-rpi-01.local` | ✅ yes |
+| Internal board | the name `imm-sensors.local` (it announces itself; the Pi uses `http://imm-sensors.local/json`) | ✅ yes |
+| External board | the Pi scans and finds it (`-ExtBoard find`) | ✅ yes |
+
+So with the current firmware **nothing is tied to an IP**: power on and it reconnects, on this router or any future one. (If a board still runs older firmware, reserve its IP in the router's DHCP settings instead — internal board MAC `68:09:47:b4:79:b4`.)
 
 ---
 
@@ -71,7 +73,7 @@ Run these in PowerShell on the laptop:
 
 ```powershell
 ping -4 -n 1 node-rpi-01.local
-curl.exe -m 5 http://192.168.1.144/json
+curl.exe -m 5 http://imm-sensors.local/json
 curl.exe -m 5 http://192.168.1.139/data
 ssh pratham@node-rpi-01.local "systemctl is-active imm-sensor-pipeline@esp32_bridge.py imm-sensor-pipeline@external_board_bridge.py imm-sd-recorder"
 ```
@@ -87,7 +89,7 @@ Re-run the setup after a board's IP changed (replace the IPs as needed):
 
 ```powershell
 cd C:\Users\PRATHAM\Documents\imm-os-edge
-.\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -ExtBoard http://192.168.1.139/data -IntBoard http://192.168.1.144/json
+.\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -ExtBoard find -IntBoard http://imm-sensors.local/json
 ```
 
 Calibrations (`CAL_O2`, `CAL_CO2`, `CAL_MQ4`) need the internal board on the Pi's USB for a moment; see [mission-operations.md](mission-operations.md#calibrations-esp32-sensor-board). They don't need a flash.
