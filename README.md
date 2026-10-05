@@ -3,6 +3,8 @@ All documentation, ADRs, API specs.
 
 ## Operations and safety
 
+- **[Operations runbook](operations-runbook.md): start the whole system, and a fix with commands for every field problem (Wi-Fi drops, changing IPs, reflashing, SD card, sensor calibration) — start here.**
+
 - [Mission record](mission-operations.md): sols (24 h from the start), IST, the 7-sol archive, downloads, warm-up and calibrations
 - [FDIR strategy](fdir-strategy.md): fault detection, isolation and recovery, layer by layer
 - [Operating modes](operating-modes.md): mission mode, subsystem GO / NO-GO, alarm lifecycle, degraded operation
