@@ -14,7 +14,8 @@ command (they are not written in this file on purpose).
 3. [Switch everything OFF](#3-switch-everything-off)
 4. [Fix anything — by symptom](#4-fix-anything--by-symptom)
 5. [Make the problems stop for good](#5-make-the-problems-stop-for-good)
-6. [Quick reference card](#6-quick-reference-card)
+6. [When you change the Wi-Fi router](#6-when-you-change-the-wi-fi-router)
+7. [Quick reference card](#7-quick-reference-card)
 
 ---
 
@@ -266,7 +267,80 @@ Most of today's pain is **unstable Wi-Fi** + **changing IPs**. Fix those two and
 
 ---
 
-## 6. Quick reference card
+## 6. When you change the Wi-Fi router
+
+Every device (Pi + both boards) stores the Wi-Fi name and password, and the router hands out the
+IPs — so a new router affects all of them. How much work it is depends on **one decision you make
+when setting up the new router**.
+
+### The one trick that makes it almost free
+**Set the new router's Wi-Fi name (SSID) and password to be *exactly the same* as the old one.**
+Then every device rejoins automatically — nothing to reconfigure. You only redo the IP
+reservations (step C) and re-point the external board (step D). Do this if you possibly can.
+
+If the new network must have a different name/password, you have to re-give the Wi-Fi to each
+device (step B).
+
+### A. Put the laptop on the new Wi-Fi
+Connect the MCC laptop to the new network first, and start Docker Desktop as usual.
+
+### B. Give each device the new Wi-Fi — ONLY if the name/password changed
+Skip this entire step if you kept the same SSID and password.
+
+- **Internal board** — plug it into the Pi's USB, then:
+  ```powershell
+  $B = "cd ~/imm-os-edge && ESP32_PORT=/dev/ttyUSB0 .venv/bin/python sensor_drivers/esp32_bridge.py --send"
+  ssh -t pratham@node-rpi-01.local "$B 'WIFI_SSID <new Wi-Fi name>'"
+  ssh -t pratham@node-rpi-01.local "$B 'WIFI_PASS <new Wi-Fi password>'"
+  ssh -t pratham@node-rpi-01.local "$B STATUS"
+  ```
+  (This needs the Pi reachable — so do the Pi first, or send it with the board on a laptop using the
+  board's own USB tools.)
+
+- **Raspberry Pi** — it can't reach Wi-Fi to be told the new Wi-Fi, so use one of:
+  1. **Ethernet cable** from the Pi to the new router, then:
+     ```powershell
+     ssh -t pratham@node-rpi-01.local "sudo nmcli device wifi connect '<new Wi-Fi name>' password '<new Wi-Fi password>'; hostname -I"
+     ```
+     Unplug the cable after.
+  2. **Monitor + keyboard** on the Pi: log in and run the same `nmcli … connect …` line.
+  3. **Re-flash the SD card** with Raspberry Pi Imager, putting the new Wi-Fi in its settings
+     (§4.10) — the simplest if you have no cable or monitor.
+
+- **External board** — plug it into the Pi's USB and set its Wi-Fi the way *its own firmware*
+  expects (for the IMM-OS external firmware it's the same `WIFI_SSID`/`WIFI_PASS` commands as the
+  internal board, with `EXT_BOARD_PORT=/dev/ttyUSB0` and `external_board_bridge.py`).
+
+### C. Redo the IP reservations in the new router
+Reservations live **inside the router**, so the new one starts with none. In the new router's
+DHCP-reservation page, reserve the three MACs again (see §5):
+
+| Device | MAC |
+|---|---|
+| Pi | `88-a2-9e-54-c3-bb` |
+| Internal board | `68-09-47-b4-79-b4` |
+| External board | `90-15-06-95-09-bc` |
+
+### D. Re-point the Pi at the boards and go live
+The external board will have a new IP on the new router — find it (§4.5) and provision:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -ExtBoard http://192.168.1.<new-ext-ip>/data -IntBoard http://imm-sensors.local/json
+```
+The internal board needs no IP — `imm-sensors.local` works on the new router automatically.
+
+### What you do NOT need to worry about on a new router
+- **The names** `node-rpi-01.local` and `imm-sensors.local` work on any router — no change.
+- **The MCC containers / dashboard** — unaffected; they run on the laptop.
+- **Your recorded data** — untouched; it's in the database on the MCC and on the Pi's SD card.
+
+> Checklist: laptop on new Wi-Fi → (if SSID/password changed) re-give Wi-Fi to Pi + both boards →
+> reserve the 3 MACs → find the external board's new IP → run `provision-pi.ps1` → check
+> http://imm.local.
+
+---
+
+## 7. Quick reference card
 
 | Thing | Value |
 |---|---|
