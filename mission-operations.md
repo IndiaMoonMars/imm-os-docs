@@ -115,6 +115,15 @@ From the Pi, run `.venv/bin/python sensor_drivers/esp32_bridge.py --send "<comma
 | `CAL_BNO_CLEAR` | Forgets the stored BNO055 calibration. |
 | `SCD_TEST` | SCD40 self-test (10 s). Use it when CO₂ reads 0 but temperature and humidity don't: *passed* means the 3.3 V supply sags during the sensor's lamp pulses (give it its own supply and short wires); *FAILED* means the sensor itself. |
 | `SCD_RESET` | SCD40 factory reset: forgets a forced recalibration and stored settings. Run `CAL_CO2` again afterwards. |
+| `SCD_OFF` / `SCD_ON` | Stop / resume using the SCD40 (remembered across restarts). Use `SCD_OFF` for a **faulty SCD40 that hangs the I2C bus and takes the other sensors down with it** — the firmware then never touches it and BME280, O₂ and BNO055 keep working. |
+
+## Self-heal if the sensors freeze
+
+If every I2C sensor on the internal board goes silent while the board keeps running (a dead
+device holding the shared bus — seen with a failed SCD40), the firmware recovers the bus after
+45 s and, if that doesn't bring the sensors back, reboots the board after 2 min to clear it. A
+reboot skips the MQ-4 warm-up, so it costs only a few seconds of data. This is a safety net —
+the real fix for a faulty device is `SCD_OFF` (above) or removing it.
 
 ## Warm-up, only where physics needs it
 
