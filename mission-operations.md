@@ -125,6 +125,49 @@ device holding the shared bus — seen with a failed SCD40), the firmware recove
 reboot skips the MQ-4 warm-up, so it costs only a few seconds of data. This is a safety net —
 the real fix for a faulty device is `SCD_OFF` (above) or removing it.
 
+## Self-heal if the board drops off the network
+
+The task watchdog only resets a board whose loop hangs. A board that is running but
+**unreachable** (Wi-Fi lost and not coming back, its web server or `imm-sensors.local` name gone
+quiet) used to stay that way until someone pressed RESET, with nothing recorded meanwhile. Now the
+firmware mends it, without a reboot where it can, so the gap is only the outage itself:
+
+| What the board sees | What it does | Data gap |
+|---|---|---|
+| Wi-Fi down 20 s | Rejoins the network, every 20 s | The outage only |
+| Wi-Fi still down after 3 min | Reboots — **once per outage** (a router that is switched off is waited for, not rebooted against) | ~10 s on top |
+| Connected, but the Pi hasn't read it for 5 min | Restarts its web server and mDNS name | none |
+| Still not read after 15 min | Reboots — once, until the Pi reads it again (a Pi that is off doesn't cause a reboot loop) | ~10 s |
+| Free memory below 16 KB (after 10 min up) | Reboots before the network stack runs out | ~10 s |
+
+On the Pi, the reader polls the IP that `imm-sensors.local` resolves to and **keeps that IP if the
+name stops resolving**, so a quiet mDNS answer costs no data. It looks the name up again after a
+failed poll, so a new DHCP address is picked up by itself.
+
+A self-heal reboot keeps the MQ-4 hot (no warm-up) and the BNO055 calibration.
+
+### Every restart is labelled in the data
+
+Each start of the board is in the record with **when** and **why**:
+
+- **Mission page → sol events:** `RESTART ESP32 board on node-rpi-01 (zone_a) restarted:
+  self-heal reboot: Wi-Fi lost (boot 25293, no data for ~200 s)`. The same line is in the printed
+  sol report.
+- **Sol download → `summary.json` → `"reboots"`:** one entry per restart: `at_ist`, `boot`, `why`
+  (power-on, RESET button, brownout, watchdog, crash, or `self-heal reboot: <cause>`),
+  `reset_reason`, `heal_cause`, `last_heard` and `gap_s` (the gap, to within the 10 s health
+  interval).
+- **Sol download → the board's CSVs** (`bme280`, `o2`, `bno055`, `mq4`, `scd40`, `board`): two
+  more columns, `board_boot` (changes at every restart) and `since_boot_s`. Filter or group by
+  `board_boot` to separate the data before and after a restart.
+- **`board.csv`** carries the health counters every 10 s: `heal_cause` (0 = not a self-heal boot,
+  1 I2C bus stall, 2 Wi-Fi lost, 3 not polled by the Pi, 4 memory low), `heal_reboots` (total since
+  flashing), `wifi_drops`, `wifi_reason`, `net_restarts`, `heap_free`, `heap_min`.
+
+`wifi_reason` is why the Wi-Fi link last dropped (ESP-IDF codes): **8** the board left, **2/15**
+authentication or handshake timeout (password or router trouble), **200** beacon timeout (lost the
+router's signal), **201** no access point found (router off or out of range).
+
 ## Warm-up, only where physics needs it
 
 | Sensor | Warm-up | How it's handled |

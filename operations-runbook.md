@@ -226,7 +226,28 @@ The values are old; new data stopped. Usually the last `provision-pi.ps1` failed
 a board that was unreachable), so the readers didn't restart. Re-run the provision (§2 step 6, or
 the single-board version in §4.7). When it finishes cleanly, the cards go back to "now".
 
-### 4.13 Readings look wrong (not missing)
+### 4.13 The internal board went offline and only RESET brings it back
+All internal sensors **and** the board's own health stop together, the external board carries on,
+and pressing the ESP32's RESET button fixes it. The board was running but unreachable. Firmware
+`9bc3923` and later mends this itself (rejoin, restart, reboot as a last resort; see
+[mission-operations.md](mission-operations.md#self-heal-if-the-board-drops-off-the-network)), so
+update the board first (§4.8 for flashing). To see **which** fault it was, read the Pi's log
+around the time it stopped:
+```powershell
+ssh pratham@node-rpi-01.local "journalctl -u imm-sensor-pipeline@esp32_bridge.py --since '2026-10-07 05:20' --until '2026-10-07 05:40' --no-pager | grep -i -E 'not answering|resolv|restarted|reachable'"
+```
+| The log says | What happened |
+|---|---|
+| `name not resolving (mDNS)` | The board was fine; its name went quiet. The reader now keeps polling its last IP. |
+| `no answer (timed out)` / `no route to host` | The board was off the Wi-Fi, without power or frozen. Rejoin/reboot now handle it. If it keeps happening, check the supply (below). |
+| `refused` | On the network, web server down: restarted after 5 min now. |
+
+Then check the board itself: `ssh -t pratham@node-rpi-01.local "$B STATUS"` (on the Pi's USB) shows
+`network: N Wi-Fi drop(s) (reason R …), … self-heal reboot(s)`. Many drops with reason **200** mean
+weak signal; repeated `reset reason 9 (BROWNOUT)` in `board.csv` means the supply sags: give the
+sensors their own 3.3 V regulator rather than the ESP32 board's, and the MQ-4 heater the 5 V input.
+
+### 4.14 Readings look wrong (not missing)
 - **MQ-4 "NOT CALIBRATED" / methane blank:** after 24–48 h powered burn-in, in clean air:
   `ssh -t pratham@node-rpi-01.local "$B CAL_MQ4"` (board on the Pi's USB).
 - **O₂ not ~20.9 %:** in fresh outdoor air: `... "$B CAL_O2"`.
