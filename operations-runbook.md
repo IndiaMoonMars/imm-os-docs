@@ -255,7 +255,44 @@ Then check the board itself: `ssh -t pratham@node-rpi-01.local "$B STATUS"` (on 
 weak signal; repeated `reset reason 9 (BROWNOUT)` in `board.csv` means the supply sags: give the
 sensors their own 3.3 V regulator rather than the ESP32 board's, and the MQ-4 heater the 5 V input.
 
-### 4.14 Readings look wrong (not missing)
+### 4.14 Pi health check: "MQTT TLS port / MQTT login / Keycloak unreachable", "MCC link DOWN"
+The Pi can't reach the laptop. **No data is lost:** the Pi stores everything ("N message(s) stored
+in the local broker") and sends it when the link is back. The Pi also re-finds the laptop by itself
+every minute if its IP changed, but only if the laptop's port 8883 answers. So the cause is on the
+laptop. The error tells which:
+
+| Error | Meaning |
+|---|---|
+| `No route to host` | Nothing at that IP: the laptop got a new IP, or it is asleep / off the Wi-Fi |
+| `timed out` | Laptop there, Windows firewall blocking (network set to Public) |
+| `Connection refused` | Laptop there, IMM-OS containers not running |
+
+Fix, in **PowerShell opened with "Run as administrator"** on the laptop:
+```powershell
+# 1. What is the laptop's IP now? (the Pi's error shows the one it is trying)
+Get-NetIPAddress -AddressFamily IPv4 | Where-Object PrefixOrigin -eq Dhcp | Select-Object InterfaceAlias, IPAddress
+# 2. Containers running? (Docker Desktop must say "Engine running"; every service should be Up/healthy)
+cd C:\Users\PRATHAM\Documents\imm-os-infra
+docker compose up -d
+docker compose ps
+# 3. Network Private (Windows sometimes puts it back to Public after a reconnect)
+Get-NetConnectionProfile | Where-Object NetworkCategory -eq 'Public' | Set-NetConnectionProfile -NetworkCategory Private
+# 4. The ports answer on the laptop itself
+Test-NetConnection localhost -Port 8883 | Select-Object TcpTestSucceeded
+Test-NetConnection localhost -Port 80   | Select-Object TcpTestSucceeded
+# 5. Don't let the laptop sleep on mains (an overnight run stops when it sleeps)
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+```
+Then make the Pi look for the laptop now instead of within the minute, and check again:
+```powershell
+ssh -t pratham@node-rpi-01.local "cd ~/imm-os-edge && sudo .venv/bin/python tools/find_mcc.py --scan"
+```
+It prints the laptop's address when found. The stored messages then drain by themselves (watch
+the number fall in the health check). If it still says not found, step 2 or 3 is the problem:
+re-run `provision-pi.ps1` as Administrator; it adds the firewall rule and warns about a Public network.
+
+### 4.15 Readings look wrong (not missing)
 - **MQ-4 "NOT CALIBRATED" / methane blank:** after 24–48 h powered burn-in, in clean air:
   `ssh -t pratham@node-rpi-01.local "$B CAL_MQ4"` (board on the Pi's USB).
 - **O₂ not ~20.9 %:** in fresh outdoor air: `... "$B CAL_O2"`.
