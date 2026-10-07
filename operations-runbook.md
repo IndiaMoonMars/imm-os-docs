@@ -236,11 +236,19 @@ around the time it stopped:
 ```powershell
 ssh pratham@node-rpi-01.local "journalctl -u imm-sensor-pipeline@esp32_bridge.py --since '2026-10-07 05:20' --until '2026-10-07 05:40' --no-pager | grep -i -E 'not answering|resolv|restarted|reachable'"
 ```
-| The log says | What happened |
+The **first** line of an outage is its cause (only failures 1, 10 and every 60th are logged); later
+lines can show a name failure that is just a consequence: a board that left the Wi-Fi also stops
+answering for its name once the Pi's cached answer runs out (~1 min).
+
+| The first line says | What happened |
 |---|---|
-| `name not resolving (mDNS)` | The board was fine; its name went quiet. The reader now keeps polling its last IP. |
-| `no answer (timed out)` / `no route to host` | The board was off the Wi-Fi, without power or frozen. Rejoin/reboot now handle it. If it keeps happening, check the supply (below). |
+| `Name or service not known` / `name not resolving (mDNS)` | The board was fine; its name went quiet. The reader now keeps polling its last IP. |
+| `timed out` / `no route to host` | The board was off the Wi-Fi, without power or frozen. Rejoin/reboot now handle it. If it keeps happening, check the supply (below). |
 | `refused` | On the network, web server down: restarted after 5 min now. |
+
+Example (7 Oct 2026, the night this was found): `05:28:26 … timed out`, then `05:29:28 … Name or
+service not known` until RESET: the board dropped off the Wi-Fi, and its own reconnect never brought
+it back.
 
 Then check the board itself: `ssh -t pratham@node-rpi-01.local "$B STATUS"` (on the Pi's USB) shows
 `network: N Wi-Fi drop(s) (reason R …), … self-heal reboot(s)`. Many drops with reason **200** mean
