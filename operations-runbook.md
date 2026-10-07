@@ -331,6 +331,40 @@ Most of today's pain is **unstable Wi-Fi** + **changing IPs**. Fix those two and
    router needs them set once. The names (`node-rpi-01.local`, `imm-sensors.local`) keep working
    on any router with no setup.
 
+6. **Run both sensor boards on the Pi's USB** — the one change that makes a Wi-Fi outage cost no
+   data. Over Wi-Fi, a router outage means the boards can't reach the Pi, so nothing is recorded
+   anywhere. Over USB the Pi reads them whatever the Wi-Fi does, and every reading still goes to
+   its three local copies: the SD-card CSVs (`/var/lib/imm-os/records/<mission>/sol-NN/`), the
+   encrypted blackbox (9 days) and the store-and-forward queue that fills the dashboard back in
+   when the laptop is reachable again (about 2 days of readings; beyond that, replay from the
+   blackbox: `.venv/bin/python core/blackbox_replay.py --since … --until …`).
+
+   Use **USB data cables** (charge-only ones show nothing), and keep each board in **its own Pi
+   USB socket**: boards with identical USB chips are told apart by the socket they're in.
+
+   ```powershell
+   cd C:\Users\PRATHAM\Documents\imm-os-edge
+   git pull
+   .\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -CopyOnly
+   # The internal board no longer needs Wi-Fi: switch it off, so its Wi-Fi self-heal never reboots it
+   ssh -t pratham@node-rpi-01.local "sudo systemctl stop imm-sensor-pipeline@esp32_bridge.py; cd ~/imm-os-edge && .venv/bin/python sensor_drivers/esp32_bridge.py --send WIFI_OFF"
+   # Read both boards over USB (finds and pins both ports, restarts the readers)
+   .\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -IntBoard usb -ExtBoard usb
+   ```
+   The setup output should show `internal sensor board on /dev/serial/…` and `external board on
+   /dev/serial/… at … baud`. If it says the external board's sketch **prints no readings on USB**
+   (it only serves them over Wi-Fi), that board still needs Wi-Fi until its sketch prints its
+   readings on USB too.
+
+   **Test it:** with a mission or test run going, switch the router off for 5 minutes, then on.
+   The dashboard shows a gap while the laptop can't be reached, then fills it back in; the sol's
+   CSVs on the Pi have no gap at all:
+   ```powershell
+   ssh pratham@node-rpi-01.local "ls -l /var/lib/imm-os/records/*/sol-*/ | tail; tail -3 /var/lib/imm-os/records/*/sol-*/bme280_*.csv"
+   ```
+   To keep the **dashboard** live during an outage too, the laptop needs a link to the Pi that
+   doesn't go through the router (a direct Ethernet cable).
+
 ---
 
 ## 6. When you change the Wi-Fi router
