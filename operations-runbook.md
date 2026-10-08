@@ -331,39 +331,69 @@ Most of today's pain is **unstable Wi-Fi** + **changing IPs**. Fix those two and
    router needs them set once. The names (`node-rpi-01.local`, `imm-sensors.local`) keep working
    on any router with no setup.
 
-6. **Run both sensor boards on the Pi's USB** — the one change that makes a Wi-Fi outage cost no
-   data. Over Wi-Fi, a router outage means the boards can't reach the Pi, so nothing is recorded
-   anywhere. Over USB the Pi reads them whatever the Wi-Fi does, and every reading still goes to
-   its three local copies: the SD-card CSVs (`/var/lib/imm-os/records/<mission>/sol-NN/`), the
-   encrypted blackbox (9 days) and the store-and-forward queue that fills the dashboard back in
-   when the laptop is reachable again (about 2 days of readings; beyond that, replay from the
-   blackbox: `.venv/bin/python core/blackbox_replay.py --since … --until …`).
+6. **Read both sensor boards over two links at once: USB cable *and* Wi-Fi.** Each board sends
+   every reading over its USB cable to the Pi and also serves it over Wi-Fi. The Pi reads both and
+   keeps each reading once (the board's own counter tells the two copies apart), so losing either
+   link loses nothing:
 
-   Use **USB data cables** (charge-only ones show nothing), and keep each board in **its own Pi
-   USB socket**: boards with identical USB chips are told apart by the socket they're in.
+   | What fails | Readings still reach the Pi over | SD card | Dashboard |
+   |---|---|---|---|
+   | Router / Wi-Fi | USB | ✅ complete | gap while the laptop can't be reached, then filled in from the Pi's queue |
+   | A board's Wi-Fi only | USB | ✅ | ✅ live |
+   | A USB cable | Wi-Fi | ✅ | ✅ live |
 
+   Every reading is saved on the Pi's SD card as CSV (`/var/lib/imm-os/records/<mission>/sol-NN/`,
+   7 sols and more, nothing deleted) with a `via` column (`usb` or `wifi`: the link it came by), and
+   the dashboard's ESP32 board cards show **USB link** and **Wi-Fi link** (1 = delivering). An
+   advisory alarm says when one link goes silent. While the Pi reads its USB, the internal board
+   never reboots itself over a Wi-Fi outage (it keeps rejoining instead), so its USB stream isn't
+   interrupted.
+
+   **Which board is where (pinned, so nothing can be mixed up):**
+
+   | | Internal board | External board |
+   |---|---|---|
+   | USB chip → Pi port (pinned in `/etc/imm-os/edge.env`) | CP2102 → `ESP32_PORT=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0` | CH340 → `EXT_BOARD_PORT=/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0` (`EXT_BOARD_BAUD=115200`) |
+   | Wi-Fi | `ESP32_URL=http://imm-sensors.local/json` | `EXT_BOARD_URL=http://192.168.1.125/data` |
+   | Zone | `zone_a` | `exterior` |
+   | Pins | I²C GPIO21 SDA / GPIO22 SCL: BME280 0x76, BNO055 0x28, SEN0322 O₂ 0x70–0x73, (SCD40 0x62, off); MQ-4 AO → divider → GPIO32 | SEN0463 Geiger pulses → GPIO4; TEL0157 GNSS I²C 0x20 on GPIO21/22 |
+   | SD files | `bme280_zone_a.csv`, `o2_zone_a.csv`, `bno055_zone_a.csv`, `mq4_zone_a.csv`, `board_zone_a.csv` | `geiger_exterior.csv`, `gnss_exterior.csv`, `board_exterior.csv` |
+
+   The ports are named by the board's USB chip, so either board can go in any Pi USB socket. Setup
+   finds each one by what it prints and pins it; the readers and `flash-esp32.sh` use those pins
+   and refuse to touch the other board's port. Use **USB data cables** (charge-only ones show nothing).
+
+   **Set it up:**
    ```powershell
    cd C:\Users\PRATHAM\Documents\imm-os-edge
    git pull
    .\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -CopyOnly
-   # The internal board no longer needs Wi-Fi: switch it off, so its Wi-Fi self-heal never reboots it
-   ssh -t pratham@node-rpi-01.local "sudo systemctl stop imm-sensor-pipeline@esp32_bridge.py; cd ~/imm-os-edge && .venv/bin/python sensor_drivers/esp32_bridge.py --send WIFI_OFF"
-   # Read both boards over USB (finds and pins both ports, restarts the readers)
-   .\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -IntBoard usb -ExtBoard usb
+   # internal board: current firmware (knows the Pi reads its USB); flashed on its own pinned port
+   ssh -t pratham@node-rpi-01.local "cd ~/imm-os-edge && ESP32_PORT=/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 ./scripts/flash-esp32.sh internal"
+   # both boards, both links
+   .\scripts\provision-pi.ps1 -PiUser pratham -PiHost node-rpi-01.local -Sensors "esp32_bridge.py external_board_bridge.py" -IntBoard both -ExtBoard both
    ```
-   The setup output should show `internal sensor board on /dev/serial/…` and `external board on
-   /dev/serial/… at … baud`. If it says the external board's sketch **prints no readings on USB**
-   (it only serves them over Wi-Fi), that board still needs Wi-Fi until its sketch prints its
-   readings on USB too.
+   Setup should print `internal sensor board: both links, USB on … and Wi-Fi at …` and `external
+   board: both links, USB on … and Wi-Fi at …`.
 
-   **Test it:** with a mission or test run going, switch the router off for 5 minutes, then on.
-   The dashboard shows a gap while the laptop can't be reached, then fills it back in; the sol's
-   CSVs on the Pi have no gap at all:
-   ```powershell
-   ssh pratham@node-rpi-01.local "ls -l /var/lib/imm-os/records/*/sol-*/ | tail; tail -3 /var/lib/imm-os/records/*/sol-*/bme280_*.csv"
+   **The external board's sketch** must print its readings on USB for its USB link to carry them;
+   until then setup says so and its readings come over Wi-Fi only. Add to its `loop()` (the same JSON
+   its `/data` page sends, on one line, once a second; it has `"uptime"`, which tells the two copies apart):
+   ```cpp
+   static unsigned long lastUsb = 0;
+   if (millis() - lastUsb >= 1000) {
+     lastUsb = millis();
+     Serial.println(dataJson);        // the String your /data handler sends
+   }
    ```
-   To keep the **dashboard** live during an outage too, the laptop needs a link to the Pi that
-   doesn't go through the router (a direct Ethernet cable).
+   Flash it as you normally do, then run the last provision command again: nothing else changes.
+
+   **Test it:** with a test run going, switch the router off for 5 minutes, then on. The SD files
+   have no gap (rows with `via` = `usb` cover the outage):
+   ```powershell
+   ssh pratham@node-rpi-01.local "tail -3 /var/lib/imm-os/records/*/sol-*/bme280_zone_a.csv"
+   ```
+   and the dashboard fills the gap in once the laptop is reachable again.
 
 ---
 
